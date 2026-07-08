@@ -848,6 +848,152 @@ class DGAttention(nn.Module):
         return self.proj(y)
 
 
+class ValueShiftAttention(nn.Module):
+    """Standard-shaped Q/K with a learned previous-value tap."""
+    def __init__(self, dim: int, num_heads: int, num_kv_heads: int, rope_base: float, qk_gain_init: float,
+                 layer_idx: int = 0, num_layers: int = 11, init_mode: str = "zero"):
+        super().__init__()
+        self.num_heads = num_heads
+        self.num_kv_heads = num_kv_heads
+        self.head_dim = dim // num_heads
+        self.d_head_dim = self.head_dim
+        d_dim = self.num_heads * self.d_head_dim
+        dk_dim = self.num_kv_heads * self.d_head_dim
+        self.c_dq = CastedLinear(dim, d_dim, bias=False)
+        self.c_dk = CastedLinear(dim, dk_dim, bias=False)
+        self.c_payload = CastedLinear(dim, self.num_kv_heads * self.head_dim, bias=False)
+        self.proj = CastedLinear(dim, dim, bias=False)
+        self.proj._zero_init = True
+        self.q_gain = nn.Parameter(torch.full((num_heads,), qk_gain_init, dtype=torch.float32))
+        self.rotary = Rotary(self.d_head_dim, base=rope_base)
+        scheduled = layer_idx / max(num_layers - 1, 1)
+        if init_mode == "dg":
+            init = -scheduled
+        elif init_mode == "pos":
+            init = scheduled
+        else:
+            init = 0.0
+        self.tap_prev = nn.Parameter(torch.full((num_kv_heads,), init, dtype=torch.float32))
+
+    def forward(self, x: Tensor, x0: Tensor = None) -> Tensor:
+        bsz, seqlen, dim = x.shape
+        dq = self.c_dq(x).reshape(bsz, seqlen, self.num_heads, self.d_head_dim).transpose(1, 2)
+        dk = self.c_dk(x).reshape(bsz, seqlen, self.num_kv_heads, self.d_head_dim).transpose(1, 2)
+        dq = F.rms_norm(dq, (dq.size(-1),))
+        dk = F.rms_norm(dk, (dk.size(-1),))
+        cos, sin = self.rotary(seqlen, x.device, dq.dtype)
+        dq = apply_rotary_emb(dq, cos, sin)
+        dk = apply_rotary_emb(dk, cos, sin)
+        dq = dq * self.q_gain.to(dtype=dq.dtype)[None, :, None, None]
+        projected = self.c_payload(x).reshape(bsz, seqlen, self.num_kv_heads, self.head_dim)
+        prev = torch.cat([torch.zeros_like(projected[:, :1]), projected[:, :-1]], dim=1)
+        payload = (projected + self.tap_prev.to(dtype=projected.dtype)[None, None, :, None] * prev).transpose(1, 2)
+        n_rep = self.num_heads // self.num_kv_heads
+        if _HAS_GQA and n_rep > 1:
+            y = F.scaled_dot_product_attention(dq, dk, payload, attn_mask=None, is_causal=True, enable_gqa=True)
+        elif n_rep > 1:
+            dk = dk.unsqueeze(2).expand(-1, -1, n_rep, -1, -1).reshape(bsz, -1, seqlen, self.d_head_dim)
+            payload = payload.unsqueeze(2).expand(-1, -1, n_rep, -1, -1).reshape(bsz, -1, seqlen, self.head_dim)
+            y = F.scaled_dot_product_attention(dq, dk, payload, attn_mask=None, is_causal=True)
+        else:
+            y = F.scaled_dot_product_attention(dq, dk, payload, attn_mask=None, is_causal=True)
+        y = y.transpose(1, 2).contiguous().reshape(bsz, seqlen, dim)
+        return self.proj(y)
+
+
+class KeyShiftAttention(nn.Module):
+    """Standard value path with a learned previous-key tap."""
+    def __init__(self, dim: int, num_heads: int, num_kv_heads: int, rope_base: float, qk_gain_init: float):
+        super().__init__()
+        self.num_heads = num_heads
+        self.num_kv_heads = num_kv_heads
+        self.head_dim = dim // num_heads
+        self.d_head_dim = self.head_dim
+        d_dim = self.num_heads * self.d_head_dim
+        dk_dim = self.num_kv_heads * self.d_head_dim
+        self.c_dq = CastedLinear(dim, d_dim, bias=False)
+        self.c_dk = CastedLinear(dim, dk_dim, bias=False)
+        self.c_payload = CastedLinear(dim, self.num_kv_heads * self.head_dim, bias=False)
+        self.proj = CastedLinear(dim, dim, bias=False)
+        self.proj._zero_init = True
+        self.q_gain = nn.Parameter(torch.full((num_heads,), qk_gain_init, dtype=torch.float32))
+        self.rotary = Rotary(self.d_head_dim, base=rope_base)
+        self.tap_prev = nn.Parameter(torch.zeros(num_kv_heads, dtype=torch.float32))
+
+    def forward(self, x: Tensor, x0: Tensor = None) -> Tensor:
+        bsz, seqlen, dim = x.shape
+        dq = self.c_dq(x).reshape(bsz, seqlen, self.num_heads, self.d_head_dim).transpose(1, 2)
+        dk = self.c_dk(x).reshape(bsz, seqlen, self.num_kv_heads, self.d_head_dim)
+        prev_dk = torch.cat([torch.zeros_like(dk[:, :1]), dk[:, :-1]], dim=1)
+        dk = (dk + self.tap_prev.to(dtype=dk.dtype)[None, None, :, None] * prev_dk).transpose(1, 2)
+        payload = self.c_payload(x).reshape(bsz, seqlen, self.num_kv_heads, self.head_dim).transpose(1, 2)
+        dq = F.rms_norm(dq, (dq.size(-1),))
+        dk = F.rms_norm(dk, (dk.size(-1),))
+        cos, sin = self.rotary(seqlen, x.device, dq.dtype)
+        dq = apply_rotary_emb(dq, cos, sin)
+        dk = apply_rotary_emb(dk, cos, sin)
+        dq = dq * self.q_gain.to(dtype=dq.dtype)[None, :, None, None]
+        n_rep = self.num_heads // self.num_kv_heads
+        if _HAS_GQA and n_rep > 1:
+            y = F.scaled_dot_product_attention(dq, dk, payload, attn_mask=None, is_causal=True, enable_gqa=True)
+        elif n_rep > 1:
+            dk = dk.unsqueeze(2).expand(-1, -1, n_rep, -1, -1).reshape(bsz, -1, seqlen, self.d_head_dim)
+            payload = payload.unsqueeze(2).expand(-1, -1, n_rep, -1, -1).reshape(bsz, -1, seqlen, self.head_dim)
+            y = F.scaled_dot_product_attention(dq, dk, payload, attn_mask=None, is_causal=True)
+        else:
+            y = F.scaled_dot_product_attention(dq, dk, payload, attn_mask=None, is_causal=True)
+        y = y.transpose(1, 2).contiguous().reshape(bsz, seqlen, dim)
+        return self.proj(y)
+
+
+class KVShiftAttention(nn.Module):
+    """Standard-shaped attention with learned previous-key and previous-value taps."""
+    def __init__(self, dim: int, num_heads: int, num_kv_heads: int, rope_base: float, qk_gain_init: float):
+        super().__init__()
+        self.num_heads = num_heads
+        self.num_kv_heads = num_kv_heads
+        self.head_dim = dim // num_heads
+        self.d_head_dim = self.head_dim
+        d_dim = self.num_heads * self.d_head_dim
+        dk_dim = self.num_kv_heads * self.d_head_dim
+        self.c_dq = CastedLinear(dim, d_dim, bias=False)
+        self.c_dk = CastedLinear(dim, dk_dim, bias=False)
+        self.c_payload = CastedLinear(dim, self.num_kv_heads * self.head_dim, bias=False)
+        self.proj = CastedLinear(dim, dim, bias=False)
+        self.proj._zero_init = True
+        self.q_gain = nn.Parameter(torch.full((num_heads,), qk_gain_init, dtype=torch.float32))
+        self.rotary = Rotary(self.d_head_dim, base=rope_base)
+        self.tap_prev_k = nn.Parameter(torch.zeros(num_kv_heads, dtype=torch.float32))
+        self.tap_prev_v = nn.Parameter(torch.zeros(num_kv_heads, dtype=torch.float32))
+
+    def forward(self, x: Tensor, x0: Tensor = None) -> Tensor:
+        bsz, seqlen, dim = x.shape
+        dq = self.c_dq(x).reshape(bsz, seqlen, self.num_heads, self.d_head_dim).transpose(1, 2)
+        dk = self.c_dk(x).reshape(bsz, seqlen, self.num_kv_heads, self.d_head_dim)
+        prev_dk = torch.cat([torch.zeros_like(dk[:, :1]), dk[:, :-1]], dim=1)
+        dk = (dk + self.tap_prev_k.to(dtype=dk.dtype)[None, None, :, None] * prev_dk).transpose(1, 2)
+        payload = self.c_payload(x).reshape(bsz, seqlen, self.num_kv_heads, self.head_dim)
+        prev_payload = torch.cat([torch.zeros_like(payload[:, :1]), payload[:, :-1]], dim=1)
+        payload = (payload + self.tap_prev_v.to(dtype=payload.dtype)[None, None, :, None] * prev_payload).transpose(1, 2)
+        dq = F.rms_norm(dq, (dq.size(-1),))
+        dk = F.rms_norm(dk, (dk.size(-1),))
+        cos, sin = self.rotary(seqlen, x.device, dq.dtype)
+        dq = apply_rotary_emb(dq, cos, sin)
+        dk = apply_rotary_emb(dk, cos, sin)
+        dq = dq * self.q_gain.to(dtype=dq.dtype)[None, :, None, None]
+        n_rep = self.num_heads // self.num_kv_heads
+        if _HAS_GQA and n_rep > 1:
+            y = F.scaled_dot_product_attention(dq, dk, payload, attn_mask=None, is_causal=True, enable_gqa=True)
+        elif n_rep > 1:
+            dk = dk.unsqueeze(2).expand(-1, -1, n_rep, -1, -1).reshape(bsz, -1, seqlen, self.d_head_dim)
+            payload = payload.unsqueeze(2).expand(-1, -1, n_rep, -1, -1).reshape(bsz, -1, seqlen, self.head_dim)
+            y = F.scaled_dot_product_attention(dq, dk, payload, attn_mask=None, is_causal=True)
+        else:
+            y = F.scaled_dot_product_attention(dq, dk, payload, attn_mask=None, is_causal=True)
+        y = y.transpose(1, 2).contiguous().reshape(bsz, seqlen, dim)
+        return self.proj(y)
+
+
 class SharedKVAttention(nn.Module):
     """K and V share the same projection — halves KV params.
     V = linear_transform(K) so they're related but not identical."""
@@ -1126,6 +1272,19 @@ def build_attention(variant: str, dim: int, num_heads: int, num_kv_heads: int,
     elif variant == "dg":
         return DGAttention(dim, num_heads, num_kv_heads, rope_base, qk_gain_init,
                           layer_idx=layer_idx, num_layers=num_layers)
+    elif variant in ("vshift_zero", "conv2_zero"):
+        return ValueShiftAttention(dim, num_heads, num_kv_heads, rope_base, qk_gain_init,
+                                   layer_idx=layer_idx, num_layers=num_layers, init_mode="zero")
+    elif variant in ("vshift_dginit", "dg_conv2"):
+        return ValueShiftAttention(dim, num_heads, num_kv_heads, rope_base, qk_gain_init,
+                                   layer_idx=layer_idx, num_layers=num_layers, init_mode="dg")
+    elif variant in ("vshift_posinit", "conv2_pos"):
+        return ValueShiftAttention(dim, num_heads, num_kv_heads, rope_base, qk_gain_init,
+                                   layer_idx=layer_idx, num_layers=num_layers, init_mode="pos")
+    elif variant == "kshift_zero":
+        return KeyShiftAttention(dim, num_heads, num_kv_heads, rope_base, qk_gain_init)
+    elif variant == "kvshift_zero":
+        return KVShiftAttention(dim, num_heads, num_kv_heads, rope_base, qk_gain_init)
     else:
         return CausalSelfAttention(dim, num_heads, num_kv_heads, rope_base, qk_gain_init)
 
@@ -1482,10 +1641,12 @@ def main() -> None:
         p for name, p in block_named_params
         if p.ndim == 2 and not any(pattern in name for pattern in CONTROL_TENSOR_NAME_PATTERNS)
     ]
-    scalar_params = [
-        p for name, p in block_named_params
+    scalar_named_params = [
+        (name, p) for name, p in block_named_params
         if p.ndim < 2 or any(pattern in name for pattern in CONTROL_TENSOR_NAME_PATTERNS)
     ]
+    no_decay_scalar_params = [p for name, p in scalar_named_params if "tap_prev" in name]
+    scalar_params = [p for name, p in scalar_named_params if "tap_prev" not in name]
     if base_model.skip_weights.numel() > 0:
         scalar_params.append(base_model.skip_weights)
     scalar_params.append(base_model.smear.gate)
@@ -1515,11 +1676,13 @@ def main() -> None:
     )
     for group in optimizer_muon.param_groups:
         group["base_lr"] = args.matrix_lr
+    scalar_groups = [{"params": scalar_params, "lr": args.scalar_lr, "base_lr": args.scalar_lr, "weight_decay": args.weight_decay}]
+    if no_decay_scalar_params:
+        scalar_groups.append({"params": no_decay_scalar_params, "lr": args.scalar_lr, "base_lr": args.scalar_lr, "weight_decay": 0.0})
     optimizer_scalar = torch.optim.AdamW(
-        [{"params": scalar_params, "lr": args.scalar_lr, "base_lr": args.scalar_lr}],
+        scalar_groups,
         betas=(args.beta1, args.beta2),
         eps=args.adam_eps,
-        weight_decay=args.weight_decay,
         fused=True,
     )
     optimizers: list[torch.optim.Optimizer] = [optimizer_tok, optimizer_muon, optimizer_scalar]
@@ -1536,6 +1699,8 @@ def main() -> None:
     log0(f"model_params:{n_params}")
     log0(f"world_size:{world_size} grad_accum_steps:{grad_accum_steps}")
     log0(f"attention_mode:{args.attn_variant} num_heads:{args.num_heads} num_kv_heads:{args.num_kv_heads}")
+    if no_decay_scalar_params:
+        log0(f"prev_token_tap_params:{sum(p.numel() for p in no_decay_scalar_params)} weight_decay:0.0")
     log0(
         f"tie_embeddings:{args.tie_embeddings} embed_lr:{token_lr} "
         f"matrix_lr:{args.matrix_lr} scalar_lr:{args.scalar_lr}"
@@ -1684,15 +1849,28 @@ def main() -> None:
                 f"step:{step}/{args.iterations} train_loss:{train_loss.item():.4f} "
                 f"train_time:{approx_training_time_ms:.0f}ms step_avg:{approx_training_time_ms / step:.2f}ms"
             )
-            # Log DG depth schedule if using DG attention
-            if args.attn_variant == "dg" and step == 1:
+            # Log previous-token tap or fixed DG schedule state.
+            if args.attn_variant in ("dg", "dg_conv2", "vshift_zero", "conv2_zero", "vshift_dginit", "vshift_posinit", "conv2_pos", "kshift_zero", "kvshift_zero") and (
+                step == 1 or (args.val_loss_every > 0 and step % args.val_loss_every == 0) or step == args.iterations
+            ):
                 schedule = []
                 for i, block in enumerate(base_model.blocks):
                     attn = block.attn
                     if hasattr(attn, 'raw_mix'):
                         schedule.append(f"L{i}:{attn.raw_mix:.2f}raw/{1-attn.raw_mix:.2f}diff")
+                    elif hasattr(attn, 'tap_prev'):
+                        prev = attn.tap_prev.detach().float()
+                        schedule.append(
+                            f"L{i}:b_mean={prev.mean().item():.3f}/b_min={prev.min().item():.3f}/b_max={prev.max().item():.3f}"
+                        )
+                    elif hasattr(attn, 'tap_prev_k') and hasattr(attn, 'tap_prev_v'):
+                        prev_k = attn.tap_prev_k.detach().float()
+                        prev_v = attn.tap_prev_v.detach().float()
+                        schedule.append(
+                            f"L{i}:k_mean={prev_k.mean().item():.3f}/v_mean={prev_v.mean().item():.3f}"
+                        )
                 if schedule:
-                    log0(f"dg_depth_schedule:[{','.join(schedule)}]")
+                    log0(f"attention_tap_schedule:[{','.join(schedule)}]")
 
         reached_cap = max_wallclock_ms is not None and approx_training_time_ms >= max_wallclock_ms
         if distributed and max_wallclock_ms is not None:

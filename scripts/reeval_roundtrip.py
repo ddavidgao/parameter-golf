@@ -32,8 +32,10 @@ def parse_args() -> argparse.Namespace:
         "--variant",
         action="append",
         required=True,
-        choices=("standard", "dg"),
-        help="Attention variant for the corresponding --checkpoint. Repeat in the same order.",
+        help=(
+            "Attention variant for the corresponding --checkpoint. Repeat in the same order. "
+            "Examples: standard, dg, vshift_zero, vshift_dginit, kshift_zero, kvshift_zero."
+        ),
     )
     parser.add_argument("--label", action="append", help="Optional label for the corresponding checkpoint.")
     parser.add_argument("--data-path", default="./data/datasets/fineweb10B_sp1024")
@@ -285,4 +287,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
