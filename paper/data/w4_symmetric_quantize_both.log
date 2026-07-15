@@ -1,0 +1,47 @@
+train_script=/workspace/parameter-golf-dg-conv2/records/track_non_record_16mb/2026-03-23_DGAttention_DavidGao/train_gpt.py
+val_tokens=262144 seq_len=1024
+label,variant,state,eval_mode,val_loss,val_bpb
+std_seed1337,standard,fp,normal,1.94858479,1.15390351
+std_seed1337,standard,uniform_int4,normal,2.09486437,1.24052664
+quant_error label=std_seed1337 variant=standard state=uniform_int4 group=attn mse=5.79073785e-04 max_abs=2.85317421e-01 rel_rmse=1.18589631e-01
+quant_error label=std_seed1337 variant=standard state=uniform_int4 group=mlp mse=5.07148245e-04 max_abs=3.26928437e-01 rel_rmse=1.48004650e-01
+quant_error label=std_seed1337 variant=standard state=uniform_int4 group=other mse=2.29094769e-07 max_abs=9.76562500e-03 rel_rmse=3.61989977e-04
+quant_error label=std_seed1337 variant=standard state=uniform_int4 group=tok_emb mse=7.72917564e-21 max_abs=2.98023224e-08 rel_rmse=2.38664034e-10
+std_seed1337,standard,isolated_int4_attn,normal,2.00825810,1.18924056
+quant_error label=std_seed1337 variant=standard state=isolated_int4_attn group=attn mse=5.79024514e-04 max_abs=2.85317421e-01 rel_rmse=1.18543751e-01
+quant_error label=std_seed1337 variant=standard state=isolated_int4_attn group=mlp mse=0.00000000e+00 max_abs=0.00000000e+00 rel_rmse=0.00000000e+00
+quant_error label=std_seed1337 variant=standard state=isolated_int4_attn group=other mse=0.00000000e+00 max_abs=0.00000000e+00 rel_rmse=0.00000000e+00
+quant_error label=std_seed1337 variant=standard state=isolated_int4_attn group=tok_emb mse=0.00000000e+00 max_abs=0.00000000e+00 rel_rmse=0.00000000e+00
+dg_seed1337,dg,fp,normal,1.95977595,1.16053063
+dg_seed1337,dg,uniform_int4,normal,2.07834083,1.23074181
+quant_error label=dg_seed1337 variant=dg state=uniform_int4 group=attn mse=5.69972564e-04 max_abs=1.85661957e-01 rel_rmse=1.17630670e-01
+quant_error label=dg_seed1337 variant=dg state=uniform_int4 group=mlp mse=5.10680352e-04 max_abs=3.34093213e-01 rel_rmse=1.48807313e-01
+quant_error label=dg_seed1337 variant=dg state=uniform_int4 group=other mse=2.36565284e-07 max_abs=1.56250000e-02 rel_rmse=3.67771381e-04
+quant_error label=dg_seed1337 variant=dg state=uniform_int4 group=tok_emb mse=5.08219768e-21 max_abs=2.98023224e-08 rel_rmse=1.92880856e-10
+dg_seed1337,dg,isolated_int4_attn,normal,1.98847252,1.17752403
+quant_error label=dg_seed1337 variant=dg state=isolated_int4_attn group=attn mse=5.69949074e-04 max_abs=1.85661957e-01 rel_rmse=1.17593358e-01
+quant_error label=dg_seed1337 variant=dg state=isolated_int4_attn group=mlp mse=0.00000000e+00 max_abs=0.00000000e+00 rel_rmse=0.00000000e+00
+quant_error label=dg_seed1337 variant=dg state=isolated_int4_attn group=other mse=0.00000000e+00 max_abs=0.00000000e+00 rel_rmse=0.00000000e+00
+quant_error label=dg_seed1337 variant=dg state=isolated_int4_attn group=tok_emb mse=0.00000000e+00 max_abs=0.00000000e+00 rel_rmse=0.00000000e+00
+std_seed42,standard,fp,normal,1.95408660,1.15716154
+std_seed42,standard,uniform_int4,normal,2.10797679,1.24829149
+quant_error label=std_seed42 variant=standard state=uniform_int4 group=attn mse=5.68741210e-04 max_abs=1.89414516e-01 rel_rmse=1.17214132e-01
+quant_error label=std_seed42 variant=standard state=uniform_int4 group=mlp mse=5.09631569e-04 max_abs=2.55911291e-01 rel_rmse=1.48494448e-01
+quant_error label=std_seed42 variant=standard state=uniform_int4 group=other mse=2.32891902e-07 max_abs=1.17187500e-02 rel_rmse=3.67949278e-04
+quant_error label=std_seed42 variant=standard state=uniform_int4 group=tok_emb mse=4.46181222e-21 max_abs=2.98023224e-08 rel_rmse=1.80689081e-10
+std_seed42,standard,isolated_int4_attn,normal,2.02239802,1.19761387
+quant_error label=std_seed42 variant=standard state=isolated_int4_attn group=attn mse=5.68687131e-04 max_abs=1.89414516e-01 rel_rmse=1.17167003e-01
+quant_error label=std_seed42 variant=standard state=isolated_int4_attn group=mlp mse=0.00000000e+00 max_abs=0.00000000e+00 rel_rmse=0.00000000e+00
+quant_error label=std_seed42 variant=standard state=isolated_int4_attn group=other mse=0.00000000e+00 max_abs=0.00000000e+00 rel_rmse=0.00000000e+00
+quant_error label=std_seed42 variant=standard state=isolated_int4_attn group=tok_emb mse=0.00000000e+00 max_abs=0.00000000e+00 rel_rmse=0.00000000e+00
+dg_seed42,dg,fp,normal,1.95836097,1.15969272
+dg_seed42,dg,uniform_int4,normal,2.07788110,1.23046957
+quant_error label=dg_seed42 variant=dg state=uniform_int4 group=attn mse=5.55866331e-04 max_abs=1.99295670e-01 rel_rmse=1.16945093e-01
+quant_error label=dg_seed42 variant=dg state=uniform_int4 group=mlp mse=5.11011578e-04 max_abs=2.16482460e-01 rel_rmse=1.49055429e-01
+quant_error label=dg_seed42 variant=dg state=uniform_int4 group=other mse=2.32225100e-07 max_abs=1.56250000e-02 rel_rmse=3.61994744e-04
+quant_error label=dg_seed42 variant=dg state=uniform_int4 group=tok_emb mse=2.64921555e-21 max_abs=2.98023224e-08 rel_rmse=1.39442222e-10
+dg_seed42,dg,isolated_int4_attn,normal,1.99058354,1.17877412
+quant_error label=dg_seed42 variant=dg state=isolated_int4_attn group=attn mse=5.55845404e-04 max_abs=1.99295670e-01 rel_rmse=1.16912008e-01
+quant_error label=dg_seed42 variant=dg state=isolated_int4_attn group=mlp mse=0.00000000e+00 max_abs=0.00000000e+00 rel_rmse=0.00000000e+00
+quant_error label=dg_seed42 variant=dg state=isolated_int4_attn group=other mse=0.00000000e+00 max_abs=0.00000000e+00 rel_rmse=0.00000000e+00
+quant_error label=dg_seed42 variant=dg state=isolated_int4_attn group=tok_emb mse=0.00000000e+00 max_abs=0.00000000e+00 rel_rmse=0.00000000e+00
