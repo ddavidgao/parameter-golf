@@ -304,72 +304,52 @@ def load_symmetric_attention_damage() -> dict[tuple[int, str], float]:
 def localization_figure() -> None:
     adjudicated = load_adjudicated_damage()
     attention = load_symmetric_attention_damage()
-    module_states = [
-        ("Attention", None),
-        ("MLP", "isolated_int4_mlp"),
-    ]
-    projection_states = [
+    states = [
+        ("Attention (all)", None),
+        ("MLP (all)", "isolated_int4_mlp"),
         ("Value", "isolated_int4_attn_payload"),
         ("Query", "isolated_int4_attn_q"),
         ("Key", "isolated_int4_attn_k"),
         ("Output", "isolated_int4_attn_out"),
     ]
+    gaps: dict[int, list[float]] = {1337: [], 42: []}
+    for seed in gaps:
+        for _label, state in states:
+            if state is None:
+                std_damage = attention[(seed, "standard")]
+                dg_damage = attention[(seed, "dg")]
+            else:
+                std_damage = adjudicated[(seed, "standard", state)]
+                dg_damage = adjudicated[(seed, "dg", state)]
+            gaps[seed].append(std_damage - dg_damage)
 
-    def calculate_gaps(states: list[tuple[str, str | None]]) -> dict[int, list[float]]:
-        gaps: dict[int, list[float]] = {1337: [], 42: []}
-        for seed in gaps:
-            for _label, state in states:
-                if state is None:
-                    std_damage = attention[(seed, "standard")]
-                    dg_damage = attention[(seed, "dg")]
-                else:
-                    std_damage = adjudicated[(seed, "standard", state)]
-                    dg_damage = adjudicated[(seed, "dg", state)]
-                gaps[seed].append(std_damage - dg_damage)
-        return gaps
-
-    module_gaps = calculate_gaps(module_states)
-    projection_gaps = calculate_gaps(projection_states)
-    offset = 0.10
-
-    fig, axes = plt.subplots(
-        1,
-        2,
-        figsize=(6.25, 2.35),
-        gridspec_kw={"width_ratios": [0.85, 1.35]},
-        constrained_layout=True,
-    )
-
-    def draw_panel(
-        ax: plt.Axes,
-        states: list[tuple[str, str | None]],
-        gaps: dict[int, list[float]],
-        title: str,
-    ) -> None:
-        labels = [label for label, _state in states]
-        y = list(range(len(labels)))
-        ax.axvline(0, color="#747B85", linewidth=0.9, zorder=1)
-        ax.scatter(gaps[1337], [value - offset for value in y], s=42, color=STANDARD, marker="o", label="Seed 1337", zorder=3)
-        ax.scatter(gaps[42], [value + offset for value in y], s=38, color=DG, marker="D", label="Seed 42", zorder=3)
-
-        ax.set_yticks(y)
-        ax.set_yticklabels(labels)
-        ax.invert_yaxis()
-        ax.set_xlim(-0.0055, 0.0235)
-        ax.set_title(title, loc="left", fontsize=9.2)
-        ax.grid(axis="x", color=GRID, linewidth=0.7)
+    labels = [label for label, _state in states]
+    y = [5.4, 4.4, 2.7, 1.8, 0.9, 0.0]
+    fig, axes = plt.subplots(1, 2, figsize=(6.25, 2.25), sharex=True, sharey=True, constrained_layout=True)
+    for index, (ax, seed, color) in enumerate(zip(axes, [1337, 42], [STANDARD, DG], strict=True)):
+        ax.axhspan(2.25, 3.15, color="#FFF2F1", zorder=0)
+        bars = ax.barh(y, gaps[seed], height=0.53, color=color, alpha=0.92, zorder=3)
+        ax.axvline(0, color="#747B85", linewidth=0.9, zorder=2)
+        ax.axhline(3.55, color="#B7BEC8", linewidth=0.8, zorder=2)
+        for bar, gap in zip(bars, gaps[seed], strict=True):
+            ax.annotate(
+                f"{gap:+.4f}",
+                xy=(gap if gap >= 0 else 0, bar.get_y() + bar.get_height() / 2),
+                xytext=(4, 0),
+                textcoords="offset points",
+                ha="left",
+                va="center",
+                fontsize=7.2,
+                color=TEXT,
+            )
+        ax.set_title(f"Seed {seed}", color=color)
+        ax.set_yticks(y, labels)
+        ax.set_xlim(-0.006, 0.027)
+        ax.set_xlabel("Standard - value difference (BPB)")
+        ax.grid(axis="x", color=GRID, linewidth=0.7, zorder=1)
         ax.spines[["top", "right", "left"]].set_visible(False)
-
-    draw_panel(axes[0], module_states, module_gaps, "(a) Whole modules")
-    draw_panel(axes[1], projection_states, projection_gaps, "(b) Within attention")
-    axes[0].set_xlabel("Damage gap (BPB)")
-    axes[1].set_xlabel("Damage gap (BPB)")
-    axes[0].legend(loc="lower right", fontsize=7.3)
-    fig.suptitle(
-        "W4 damage reduction localizes to the value projection",
-        fontsize=10.5,
-        fontweight="bold",
-    )
+        ax.tick_params(axis="y", length=0, labelleft=index == 0)
+    fig.suptitle("The W4 advantage is concentrated in the value projection", fontsize=10.5, fontweight="bold")
     save_figure(fig, "int4_component_localization")
 
 
@@ -378,7 +358,7 @@ def gaussian_control_figure() -> None:
         1337: {"Standard": 0.02310, "Value difference": 0.00987, "reduction": "57.3% lower"},
         42: {"Standard": 0.02266, "Value difference": 0.00960, "reduction": "57.6% lower"},
     }
-    fig, axes = plt.subplots(1, 2, figsize=(6.25, 1.9), sharex=True, sharey=True, constrained_layout=True)
+    fig, axes = plt.subplots(1, 2, figsize=(6.25, 1.7), sharex=True, sharey=True, constrained_layout=True)
     for ax, seed in zip(axes, [1337, 42], strict=True):
         y = [1, 0]
         damages = [values[seed]["Standard"], values[seed]["Value difference"]]

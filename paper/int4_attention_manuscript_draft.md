@@ -210,8 +210,8 @@ MLP-only W4 is null or weakly favors standard attention.
 ![W4 component-localization gaps](figures/int4_component_localization.png)
 
 **Figure 4.** Standard-minus-value-difference damage by parameter group;
-positive values favor value differencing. The whole-module comparison is shown
-separately from the projections nested inside attention. Each point is a
+positive values favor value differencing. Rows above the divider are whole
+modules; rows below it isolate projections within attention. Each bar is a
 separate intervention, so the effects need not add linearly.
 
 The value projection alone accounts for 81.4% and 80.7% of the matched

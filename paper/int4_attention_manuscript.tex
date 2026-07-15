@@ -170,8 +170,8 @@ Quantizing one parameter group at a time gave a sharp answer: attention-only W4 
 
 \begin{figure}[H]
 \centering
-\pandocbounded{\includegraphics[keepaspectratio,alt={Standard-minus-value-difference damage by parameter group; positive values favor value differencing. The whole-module comparison is shown separately from the projections nested inside attention. Each point is a separate intervention, so the effects need not add linearly.}]{figures/int4_component_localization.png}}
-\caption{Standard-minus-value-difference damage by parameter group; positive values favor value differencing. The whole-module comparison is shown separately from the projections nested inside attention. Each point is a separate intervention, so the effects need not add linearly.}
+\pandocbounded{\includegraphics[keepaspectratio,alt={Standard-minus-value-difference damage by parameter group; positive values favor value differencing. Rows above the divider are whole modules; rows below it isolate projections within attention. Each bar is a separate intervention, so the effects need not add linearly.}]{figures/int4_component_localization.png}}
+\caption{Standard-minus-value-difference damage by parameter group; positive values favor value differencing. Rows above the divider are whole modules; rows below it isolate projections within attention. Each bar is a separate intervention, so the effects need not add linearly.}
 \end{figure}
 
 The value projection alone accounts for 81.4\% and 80.7\% of the matched attention-only gap. Isolating queries, keys, or the output projection explains less than 9\% in either seed, and one query gap changes sign. The result thus localizes first to attention and then to the exact projection modified by value differencing. Exact paired damages and row provenance are included in the released component table.
