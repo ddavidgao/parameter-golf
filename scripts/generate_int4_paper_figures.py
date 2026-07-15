@@ -235,58 +235,42 @@ def endpoint_reversal_figure() -> None:
             "value difference": (1.1596927, 1.2304696),
         },
     }
-    fig, axes = plt.subplots(1, 2, figsize=(6.25, 2.45), sharex=True, sharey=True, constrained_layout=True)
-    conditions = [("Full precision", 0), ("After W4", 1)]
+    fig, axes = plt.subplots(1, 2, figsize=(6.25, 2.45), sharey=True, constrained_layout=True)
+    conditions = [("Full precision", 0, "#7C838D"), ("After W4", 1, DG)]
     for ax, seed in zip(axes, [1337, 42], strict=True):
-        for condition, index in conditions:
-            y = 1 - index
-            ax.plot(
-                values[seed]["standard"][index],
-                y,
-                marker="o",
-                markersize=6,
-                color=STANDARD,
-                linestyle="none",
-                label="Standard" if index == 0 else None,
-                zorder=3,
-            )
-            ax.plot(
-                values[seed]["value difference"][index],
-                y,
-                marker="D",
-                markersize=5.5,
-                color=DG,
-                linestyle="none",
-                label="Value difference" if index == 0 else None,
-                zorder=3,
-            )
+        differences = [
+            values[seed]["value difference"][index] - values[seed]["standard"][index]
+            for _condition, index, _color in conditions
+        ]
+        bars = ax.bar(
+            [condition for condition, _index, _color in conditions],
+            differences,
+            color=[color for _condition, _index, color in conditions],
+            width=0.56,
+            zorder=3,
+        )
+        for bar, difference in zip(bars, differences, strict=True):
+            offset = 4 if difference >= 0 else -5
+            vertical_alignment = "bottom" if difference >= 0 else "top"
             ax.annotate(
-                f"{values[seed]['standard'][index]:.3f}",
-                xy=(values[seed]["standard"][index], y),
-                xytext=(0, 7),
+                f"{difference:+.4f}",
+                xy=(bar.get_x() + bar.get_width() / 2, difference),
+                xytext=(0, offset),
                 textcoords="offset points",
                 ha="center",
-                color=STANDARD,
-                fontsize=7.5,
-            )
-            ax.annotate(
-                f"{values[seed]['value difference'][index]:.3f}",
-                xy=(values[seed]["value difference"][index], y),
-                xytext=(0, -11),
-                textcoords="offset points",
-                ha="center",
-                color=DG,
-                fontsize=7.5,
+                va=vertical_alignment,
+                fontsize=8.0,
+                fontweight="bold",
+                color=TEXT,
             )
         ax.set_title(f"Seed {seed}")
-        ax.set_xlim(1.145, 1.255)
-        ax.set_yticks([1, 0], ["Full precision", "After W4"])
-        ax.grid(axis="x", color=GRID, linewidth=0.7)
-        ax.spines[["top", "right", "left"]].set_visible(False)
-        ax.tick_params(axis="y", length=0)
-        ax.set_xlabel("Validation BPB (lower is better)")
-    axes[0].legend(loc="center right", frameon=False)
-    fig.suptitle("The lower-BPB model changes after W4", fontsize=10.5, fontweight="bold")
+        ax.axhline(0, color="#747B85", linewidth=1.0, zorder=2)
+        ax.set_ylim(-0.0225, 0.0105)
+        ax.grid(axis="y", color=GRID, linewidth=0.7, zorder=1)
+        ax.spines[["top", "right", "left", "bottom"]].set_visible(False)
+        ax.tick_params(axis="x", length=0)
+    axes[0].set_ylabel("BPB difference")
+    fig.suptitle("W4 flips the paired BPB difference", fontsize=10.5, fontweight="bold")
     save_figure(fig, "int4_endpoint_reversal")
 
 

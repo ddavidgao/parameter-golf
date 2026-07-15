@@ -162,9 +162,9 @@ evaluator values.
 
 ![Endpoint ordering before and after W4](figures/int4_endpoint_reversal.png)
 
-**Figure 2.** Each row compares the two architectures under one evaluation
-condition; no line joins full precision to W4. Standard attention has lower BPB
-before quantization, while value differencing has lower BPB afterward in both
+**Figure 2.** Paired BPB difference between value differencing and standard
+attention. Positive values mean standard attention has lower BPB; negative
+values mean value differencing has lower BPB. W4 changes the sign in both
 training seeds.
 
 The comparison is matched by training tokens, not time. Peak VRAM is tied, and
