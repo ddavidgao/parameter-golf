@@ -147,8 +147,16 @@ All claim-bearing endpoint and localization results use raw pre-SWA
 checkpoints and the same certified 256-sequence evaluator. Comparisons are
 paired by training seed and checkpoint. The two independent endpoint seeds are
 1337 and 42; intermediate checkpoints and perturbation seeds are not counted as
-additional training seeds. Appendix D records evaluator calibration,
-eligibility corrections, preregistration hashes, and artifact provenance.
+additional training seeds.
+
+### 2.4 Reproducibility
+
+I release the evaluator, run scripts, source archives, checkpoint hashes, raw
+logs, machine-readable result tables, cost ledgers, preregistration snapshots,
+and SHA-256 manifests with the paper. The release also contains the detailed
+calibration, eligibility, and protocol-deviation records behind the summarized
+results below. Within the final control session, repeated evaluations were
+bit-exact; cross-session full-precision evaluation agreed within 0.000011 BPB.
 
 ## 3. Quantization Reverses the Ordering
 
@@ -157,8 +165,8 @@ eligibility corrections, preregistration hashes, and artifact provenance.
 Figure 2 contains the central result. Standard attention is better before
 quantization in both seeds. After W4, value differencing is better in both. It
 reduces W4 damage by 18.95% and 22.33%, overcoming the full-precision deficit
-and improving post-W4 BPB by 0.00978 and 0.01782. Appendix A reports the exact
-evaluator values.
+and improving post-W4 BPB by 0.00978 and 0.01782. The exact endpoint values are
+included in the released result table.
 
 ![Endpoint ordering before and after W4](figures/int4_endpoint_reversal.png)
 
@@ -168,10 +176,9 @@ values mean value differencing has lower BPB. W4 changes the sign in both
 training seeds.
 
 The comparison is matched by training tokens, not time. Peak VRAM is tied, and
-the measured implementation takes 6.72% longer per step. At the nearest saved
-approximately matched-wall-clock checkpoints, it wins only one of four late
-comparisons (Appendix A). The result is therefore not compute-adjusted
-superiority.
+the measured implementation takes 6.72% longer per step. At four late,
+approximately matched-wall-clock checkpoint pairs, it wins only once. The
+result is therefore not compute-adjusted superiority.
 
 ### 3.2 The gap persists through training
 
@@ -189,6 +196,8 @@ learning-rate decay, from 0.00573 BPB at 16K to 0.01981 at 20K. I treat this as
 descriptive context, consistent with prior work on training dynamics and
 quantization \citep{ouyang2024undertrained,catalan2025training}, not as a
 mechanism.
+
+\clearpage
 
 ## 4. The Difference Lives in Attention
 
@@ -209,7 +218,8 @@ The value projection alone accounts for 81.4% and 80.7% of the matched
 attention-only gap. Isolating queries, keys, or the output projection explains
 less than 9% in either seed, and one query gap changes sign. The result thus
 localizes first to attention and then to the exact projection modified by value
-differencing. Exact paired damages and row provenance appear in Appendix B.
+differencing. Exact paired damages and row provenance are included in the
+released component table.
 
 This is not simply lower quantization error. Attention-weight relative RMSE is
 0.11854 versus 0.11759 in seed 1337 and 0.11717 versus 0.11691 in seed 42: a
@@ -230,13 +240,14 @@ from 0.02266 to 0.00960 BPB in seed 42 (Figure 5).
 
 **Figure 5.** Mean BPB damage under RMSE-matched Gaussian perturbations of
 attention weights. Value differencing reduces damage by 57.3% and 57.6% across
-the two training seeds. Appendix C reports all six paired noise realizations.
+the two training seeds. The released control table reports all six paired noise
+realizations.
 
 This control rejects an explanation specific to deterministic W4 rounding. It
 supports lower local sensitivity within the tested attention-parameter
 subspace. It does **not** establish that the entire model lies in a globally
-flatter loss basin. Appendix C reports all six perturbation rows and the small
-historical eligibility asymmetry, which biases against the modified model.
+flatter loss basin. The released control record documents a small historical
+eligibility asymmetry that biases against the modified model.
 
 ## 5. What Did Not Survive
 
@@ -254,8 +265,8 @@ rejected both. Gentle int6 quantization is effectively a null for both models.
 What survives those tests is specific and repeatable within the measured
 setting: W4 damage is lower, the difference is attention-local, most of it lies
 in the value projection, and RMSE-matched random perturbations reproduce the
-ordering. Appendix E gives the complete hypothesis ledger, including the tests
-that failed.
+ordering. The released artifacts retain the complete hypothesis ledger and its
+dated decision rules.
 
 ## 6. Interpretation
 
@@ -321,7 +332,9 @@ kernel-level latency and memory measurements.
 The experiments establish localization and local sensitivity, not mechanism.
 The result may disappear with scale, a different MLP family, or a quantizer
 that repairs the vulnerable directions in standard attention. Those are useful
-boundaries for future work, not assumptions I treat as passed.
+boundaries for future work, not assumptions I treat as passed. Code, artifacts,
+and the full audit trail are available at
+<https://github.com/ddavidgao/parameter-golf>.
 
 ## 9. Conclusion
 
@@ -336,139 +349,5 @@ implementation is slower. The scientific result is nevertheless clear within
 its scope: changing what attention transmits can change how much damage its
 weights cause when perturbed, even when their numerical reconstruction error is
 almost the same.
-
-## Data and Code Availability
-
-I maintain the code at <https://github.com/ddavidgao/parameter-golf>. The
-submission release will pin the evaluator, run scripts, source archives,
-checkpoint hashes, raw logs, CSV summaries, cost ledgers, and SHA-256 manifests
-to an immutable commit. Every paid run used a software cost cap, durable local
-mirroring, and pod deletion after checksum verification.
-
-## Appendix A. Runtime and Probe-Specific Results
-
-The canonical endpoint values underlying Figure 2 are:
-
-| Seed | Model | FP BPB | W4 damage | Post-W4 BPB |
-| ---: | --- | ---: | ---: | ---: |
-| 1337 | standard | 1.1539035 | 0.0866231 | 1.2405266 |
-| 1337 | value difference | 1.1605306 | 0.0702112 | **1.2307418** |
-| 42 | standard | 1.1571615 | 0.0911300 | 1.2482915 |
-| 42 | value difference | 1.1596927 | 0.0707769 | **1.2304696** |
-
-These are raw pre-SWA checkpoints evaluated on 256 sequences under the
-symmetric W4 policy.
-
-At nearest saved approximately matched-wall-clock checkpoints, value
-differencing wins one of four late comparisons. These pairs are not
-schedule-matched reruns and may occupy different learning-rate phases.
-
-| Standard step | Value-difference step | Time difference | Standard post-W4 | Value-difference post-W4 | Winner |
-| ---: | ---: | ---: | ---: | ---: | --- |
-| 17K | 16K | -0.24% | 1.31044 | 1.30170 | value difference |
-| 18K | 17K | +0.18% | 1.28715 | 1.29583 | standard |
-| 19K | 18K | +0.60% | 1.27167 | 1.27536 | standard |
-| 20K | 19K | +1.13% | 1.24775 | 1.25639 | standard |
-
-The broad compression hypothesis also failed. At 20K, MLP pruning and int5
-dead-zone rankings disagree between the two seeds:
-
-| Seed | State / evaluator | Probe | Standard damage | Value-difference damage | Gap |
-| ---: | --- | --- | ---: | ---: | ---: |
-| 1337 | post-SWA, legacy | 50% MLP prune | 0.12995 | 0.16549 | -0.03554 |
-| 42 | pre-SWA, 256 seq. | 50% MLP prune | 0.16704 | 0.15640 | +0.01064 |
-| 1337 | post-SWA, legacy | MLP int5 dead zone | 0.03215 | 0.07859 | -0.04644 |
-| 42 | pre-SWA, 256 seq. | MLP int5 dead zone | 0.04649 | 0.03939 | +0.00709 |
-
-Positive gaps favor value differencing. Because checkpoint states and evaluator
-scopes differ across the legacy seed-1337 and later seed-42 diagnostics, I
-interpret only paired within-row orderings and make no pruning claim.
-
-## Appendix B. Evaluator and Component Details
-
-The canonical endpoint policy quantizes both architectures' eligible final-layer
-K matrices. The original trajectory policy retained `blocks.10.attn.c_k` but
-not the modified model's equivalently placed `c_dk`; it therefore quantized one
-extra modified-model matrix. Two later symmetric controls, retaining both or
-quantizing both, preserve the ordering in both seeds.
-
-The attention+MLP and attention-only rows below come from the symmetric
-quantize-both control log. The remaining rows come from the adjudicated
-component session. Every damage value is paired with the FP baseline from its
-own session. Cross-session FP reproduction agrees within 0.000011 BPB.
-
-The full component split underlying Figure 4 is:
-
-| Seed | Component | Standard damage | Value-difference damage | Gap | Share of attention gap |
-| ---: | --- | ---: | ---: | ---: | ---: |
-| 1337 | attention + MLP | 0.086623 | 0.070211 | +0.016412 | -- |
-| 1337 | attention | 0.035336 | 0.016992 | +0.018344 | 100.0% |
-| 1337 | MLP | 0.044402 | 0.047444 | -0.003042 | -- |
-| 1337 | query | 0.002503 | 0.001966 | +0.000537 | 2.9% |
-| 1337 | key | 0.003459 | 0.002044 | +0.001415 | 7.7% |
-| 1337 | value | 0.021857 | 0.006924 | +0.014933 | 81.4% |
-| 1337 | output | 0.006117 | 0.005187 | +0.000930 | 5.1% |
-| 42 | attention + MLP | 0.091130 | 0.070777 | +0.020353 | -- |
-| 42 | attention | 0.040447 | 0.019077 | +0.021370 | 100.0% |
-| 42 | MLP | 0.046621 | 0.045742 | +0.000879 | -- |
-| 42 | query | 0.002252 | 0.002357 | -0.000104 | -0.5% |
-| 42 | key | 0.003153 | 0.001804 | +0.001349 | 6.3% |
-| 42 | value | 0.024911 | 0.007672 | +0.017239 | 80.7% |
-| 42 | output | 0.006572 | 0.004887 | +0.001685 | 7.9% |
-
-Shares use the canonical attention-only gap. They do not sum to 100% because
-each row quantizes one component in isolation and the interventions interact
-nonlinearly. An unpreregistered embedding-only diagnostic also favors value
-differencing in both seeds (+0.00546 and +0.00413 BPB), but embeddings are
-excluded from the canonical W4 policy and the observation carries no claim.
-
-## Appendix C. Gaussian Attention-Weight Controls
-
-Each row uses per-tensor relative RMSE 0.117. Noise seeds are paired across
-architectures.
-
-| Training seed | Noise seed | Standard damage | Value-difference damage | Gap |
-| ---: | ---: | ---: | ---: | ---: |
-| 1337 | 1001 | 0.025228 | 0.010417 | +0.014811 |
-| 1337 | 1002 | 0.022408 | 0.009817 | +0.012591 |
-| 1337 | 1003 | 0.021659 | 0.009389 | +0.012270 |
-| 42 | 1001 | 0.023731 | 0.009222 | +0.014510 |
-| 42 | 1002 | 0.020759 | 0.009590 | +0.011169 |
-| 42 | 1003 | 0.023489 | 0.009980 | +0.013509 |
-
-The historical final-K eligibility asymmetry gives the modified model one
-additional perturbed matrix. The control is therefore conservative rather than
-exactly matrix-count matched.
-
-## Appendix D. Evaluation and Preregistration Audit
-
-The 256-sequence evaluator was calibrated against full evaluation on four
-seed-1337 endpoints and three perturbations. Two independent preflights found
-absolute damage differences of 0.000009--0.002298 and
-0.000014--0.002255 BPB while preserving every architecture ranking. The later
-component implementation reproduced established W4 damage within 0.000043 BPB.
-Repeated checkpoints were bit-exact within the final control session;
-cross-session FP evaluation agreed within 0.000011 BPB.
-
-Preregistration evolved only after recorded falsifications. The seed-42 source
-archive is `6116d694...f4dd`; its preregistration snapshot is
-`2d2c3bcb...6c2f`. The component archive is `61729e98...17d`; its later pre-run
-snapshot is `46f72fbe...6b5e`. I use *preregistered* only for tests and
-interpretation rules present before their corresponding runs. W4 became the
-headline through sequential narrowing; it was not the project's original
-hypothesis.
-
-## Appendix E. Hypothesis Ledger
-
-| Hypothesis | Decisive test | Verdict |
-| --- | --- | --- |
-| Value differencing reduces peak VRAM | Matched runtime measurements | Rejected: dimensions and VRAM tied |
-| Value differencing is generally compression robust | int6, Gaussian, pruning, and dead-zone probes | Rejected: probe-specific |
-| Training maturity reverses the architecture ranking | Preregistered seed-42 2K--20K trajectory | Rejected: inversion did not replicate |
-| Attention differencing moves dependence into MLPs | Layerwise and branch-intervention gates | Rejected: predicted interaction absent |
-| Value differencing reduces W4 damage | Two endpoints and one paired trajectory | Supported within scope |
-| The W4 gap localizes to attention | Component isolation | Supported in both seeds |
-| The attention gap localizes to the value projection | Q/K/value/output isolation | Supported in both seeds |
-| Value differencing tolerates matched attention noise | Three noise seeds per checkpoint pair | Supported within tested subspace |
 
 \bibliography{int4_attention_refs}

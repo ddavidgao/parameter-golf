@@ -94,7 +94,7 @@ def trajectory_figure() -> None:
 
     ax.set_title("W4 damage gap through training (seed 42)", loc="left")
     ax.set_xlabel("Training step")
-    ax.set_ylabel("Damage gap (BPB): standard - value difference")
+    ax.set_ylabel("W4 damage gap (BPB)")
     ax.set_xlim(1_500, 20_500)
     ax.set_ylim(-0.001, max(gaps) * 1.20)
     ax.set_xticks([2_000, 4_000, 6_000, 8_000, 10_000, 12_000, 14_000, 16_000, 18_000, 20_000])
@@ -269,7 +269,7 @@ def endpoint_reversal_figure() -> None:
         ax.grid(axis="y", color=GRID, linewidth=0.7, zorder=1)
         ax.spines[["top", "right", "left", "bottom"]].set_visible(False)
         ax.tick_params(axis="x", length=0)
-    axes[0].set_ylabel("BPB difference")
+    axes[0].set_ylabel("Value difference - standard (BPB)")
     fig.suptitle("W4 flips the paired BPB difference", fontsize=10.5, fontweight="bold")
     save_figure(fig, "int4_endpoint_reversal")
 

@@ -33,7 +33,7 @@ def pandoc_fragment(markdown: str, pandoc: str, shift_headings: bool = False) ->
         capture_output=True,
     )
     latex = result.stdout.strip().replace("-\\/-", "--")
-    return latex.replace("\\begin{figure}\n", "\\begin{figure}[!htbp]\n")
+    return latex.replace("\\begin{figure}\n", "\\begin{figure}[H]\n")
 
 
 def fold_figure_captions(markdown: str) -> str:
@@ -118,6 +118,7 @@ def latex_document(abstract: str, body: str) -> str:
 \usepackage{{amsmath}}
 \usepackage{{array,booktabs,calc,longtable}}
 \usepackage{{graphicx}}
+\usepackage{{float}}
 \usepackage{{microtype}}
 \usepackage{{enumitem}}
 \usepackage{{caption}}
